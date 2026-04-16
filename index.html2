@@ -1,0 +1,527 @@
+import { useState, useRef, useEffect } from "react";
+
+const FILTERS = ["ALL", "ACTIVE", "DONE"];
+
+const PRIORITIES = {
+  HIGH: { label: "HIGH", color: "#FF3B30", bg: "#FF3B3015" },
+  MED:  { label: "MED",  color: "#FF9500", bg: "#FF950015" },
+  LOW:  { label: "LOW",  color: "#34C759", bg: "#34C75915" },
+};
+
+function generateId() {
+  return Math.random().toString(36).slice(2, 9);
+}
+
+export default function TodoApp() {
+  const [todos, setTodos] = useState([
+    { id: generateId(), text: "Design something unforgettable", done: false, priority: "HIGH", created: Date.now() - 86400000 },
+    { id: generateId(), text: "Read 30 pages before bed", done: false, priority: "MED", created: Date.now() - 3600000 },
+    { id: generateId(), text: "Buy coffee beans", done: true, priority: "LOW", created: Date.now() - 7200000 },
+  ]);
+  const [input, setInput] = useState("");
+  const [priority, setPriority] = useState("MED");
+  const [filter, setFilter] = useState("ALL");
+  const [editId, setEditId] = useState(null);
+  const [editText, setEditText] = useState("");
+  const [shake, setShake] = useState(false);
+  const inputRef = useRef(null);
+  const editRef = useRef(null);
+
+  useEffect(() => {
+    if (editRef.current) editRef.current.focus();
+  }, [editId]);
+
+  const filtered = todos.filter(t =>
+    filter === "ALL" ? true : filter === "DONE" ? t.done : !t.done
+  );
+
+  const addTodo = () => {
+    const trimmed = input.trim();
+    if (!trimmed) {
+      setShake(true);
+      setTimeout(() => setShake(false), 500);
+      return;
+    }
+    setTodos(prev => [
+      { id: generateId(), text: trimmed, done: false, priority, created: Date.now() },
+      ...prev,
+    ]);
+    setInput("");
+    inputRef.current?.focus();
+  };
+
+  const toggleDone = id =>
+    setTodos(prev => prev.map(t => t.id === id ? { ...t, done: !t.done } : t));
+
+  const deleteTodo = id =>
+    setTodos(prev => prev.filter(t => t.id !== id));
+
+  const saveEdit = id => {
+    const trimmed = editText.trim();
+    if (trimmed) setTodos(prev => prev.map(t => t.id === id ? { ...t, text: trimmed } : t));
+    setEditId(null);
+  };
+
+  const clearDone = () => setTodos(prev => prev.filter(t => !t.done));
+
+  const doneCount = todos.filter(t => t.done).length;
+  const totalCount = todos.length;
+  const progress = totalCount === 0 ? 0 : Math.round((doneCount / totalCount) * 100);
+
+  return (
+    <div style={styles.root}>
+      <style>{cssAnimations}</style>
+
+      {/* Header */}
+      <div style={styles.header}>
+        <div style={styles.headerTop}>
+          <div>
+            <div style={styles.subtitle}>YOUR TASKS</div>
+            <div style={styles.title}>TODO</div>
+          </div>
+          <div style={styles.statsBlock}>
+            <div style={styles.bigNum}>{totalCount - doneCount}</div>
+            <div style={styles.bigNumLabel}>remaining</div>
+          </div>
+        </div>
+
+        {/* Progress bar */}
+        <div style={styles.progressTrack}>
+          <div style={{ ...styles.progressFill, width: `${progress}%` }} />
+        </div>
+        <div style={styles.progressLabel}>{progress}% complete · {doneCount}/{totalCount} done</div>
+      </div>
+
+      {/* Input */}
+      <div style={{ ...styles.inputRow, ...(shake ? styles.shake : {}) }} className={shake ? "shake" : ""}>
+        <input
+          ref={inputRef}
+          style={styles.input}
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={e => e.key === "Enter" && addTodo()}
+          placeholder="What needs doing?"
+          maxLength={120}
+        />
+        <div style={styles.priorityGroup}>
+          {Object.entries(PRIORITIES).map(([key, val]) => (
+            <button
+              key={key}
+              style={{
+                ...styles.priBtn,
+                background: priority === key ? val.color : "transparent",
+                color: priority === key ? "#fff" : val.color,
+                borderColor: val.color,
+              }}
+              onClick={() => setPriority(key)}
+            >
+              {val.label}
+            </button>
+          ))}
+        </div>
+        <button style={styles.addBtn} onClick={addTodo}>
+          <span style={styles.plus}>+</span>
+        </button>
+      </div>
+
+      {/* Filters */}
+      <div style={styles.filterRow}>
+        {FILTERS.map(f => (
+          <button
+            key={f}
+            style={{ ...styles.filterBtn, ...(filter === f ? styles.filterBtnActive : {}) }}
+            onClick={() => setFilter(f)}
+          >
+            {f}
+          </button>
+        ))}
+        {doneCount > 0 && (
+          <button style={styles.clearBtn} onClick={clearDone}>
+            CLEAR DONE
+          </button>
+        )}
+      </div>
+
+      {/* List */}
+      <div style={styles.list}>
+        {filtered.length === 0 && (
+          <div style={styles.empty}>
+            {filter === "DONE" ? "Nothing completed yet." : "All clear. Add a task above."}
+          </div>
+        )}
+        {filtered.map((todo, i) => {
+          const pri = PRIORITIES[todo.priority];
+          return (
+            <div
+              key={todo.id}
+              style={{
+                ...styles.item,
+                opacity: todo.done ? 0.5 : 1,
+                borderLeft: `3px solid ${pri.color}`,
+                animationDelay: `${i * 40}ms`,
+              }}
+              className="todo-item"
+            >
+              {/* Checkbox */}
+              <button
+                style={{ ...styles.check, borderColor: pri.color, background: todo.done ? pri.color : "transparent" }}
+                onClick={() => toggleDone(todo.id)}
+                title={todo.done ? "Mark undone" : "Mark done"}
+              >
+                {todo.done && <span style={styles.checkmark}>✓</span>}
+              </button>
+
+              {/* Text / Edit */}
+              <div style={styles.textArea}>
+                {editId === todo.id ? (
+                  <input
+                    ref={editRef}
+                    style={styles.editInput}
+                    value={editText}
+                    onChange={e => setEditText(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === "Enter") saveEdit(todo.id);
+                      if (e.key === "Escape") setEditId(null);
+                    }}
+                    onBlur={() => saveEdit(todo.id)}
+                    maxLength={120}
+                  />
+                ) : (
+                  <span
+                    style={{ ...styles.todoText, textDecoration: todo.done ? "line-through" : "none" }}
+                    onDoubleClick={() => { setEditId(todo.id); setEditText(todo.text); }}
+                    title="Double-click to edit"
+                  >
+                    {todo.text}
+                  </span>
+                )}
+                <span style={{ ...styles.priTag, color: pri.color, background: pri.bg }}>
+                  {todo.priority}
+                </span>
+              </div>
+
+              {/* Actions */}
+              <div style={styles.actions} className="todo-actions">
+                <button
+                  style={styles.actionBtn}
+                  onClick={() => { setEditId(todo.id); setEditText(todo.text); }}
+                  title="Edit"
+                >✎</button>
+                <button
+                  style={{ ...styles.actionBtn, ...styles.deleteBtn }}
+                  onClick={() => deleteTodo(todo.id)}
+                  title="Delete"
+                >✕</button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Footer */}
+      <div style={styles.footer}>
+        Double-click any task to edit · Enter to add
+      </div>
+    </div>
+  );
+}
+
+const cssAnimations = `
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;700;800&display=swap');
+
+  @keyframes slideIn {
+    from { transform: translateX(-12px); opacity: 0; }
+    to   { transform: translateX(0);    opacity: 1; }
+  }
+  .todo-item {
+    animation: slideIn 0.25s ease both;
+  }
+  .todo-item:hover .todo-actions { opacity: 1 !important; }
+  @keyframes shakeAnim {
+    0%,100% { transform: translateX(0); }
+    20%      { transform: translateX(-6px); }
+    40%      { transform: translateX(6px); }
+    60%      { transform: translateX(-4px); }
+    80%      { transform: translateX(4px); }
+  }
+  .shake { animation: shakeAnim 0.45s ease; }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0d0d0d; }
+
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: #1a1a1a; }
+  ::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
+`;
+
+const styles = {
+  root: {
+    fontFamily: "'Space Mono', monospace",
+    background: "#0d0d0d",
+    color: "#e8e8e8",
+    minHeight: "100vh",
+    maxWidth: 580,
+    margin: "0 auto",
+    padding: "32px 20px 60px",
+  },
+  header: {
+    marginBottom: 28,
+  },
+  headerTop: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-end",
+    marginBottom: 16,
+  },
+  subtitle: {
+    fontFamily: "'Space Mono', monospace",
+    fontSize: 11,
+    letterSpacing: "0.25em",
+    color: "#555",
+    marginBottom: 4,
+  },
+  title: {
+    fontFamily: "'Syne', sans-serif",
+    fontSize: 52,
+    fontWeight: 800,
+    lineHeight: 1,
+    letterSpacing: "-0.03em",
+    color: "#f0f0f0",
+  },
+  statsBlock: {
+    textAlign: "right",
+  },
+  bigNum: {
+    fontFamily: "'Syne', sans-serif",
+    fontSize: 48,
+    fontWeight: 800,
+    lineHeight: 1,
+    color: "#f0f0f0",
+  },
+  bigNumLabel: {
+    fontSize: 10,
+    letterSpacing: "0.2em",
+    color: "#444",
+    textTransform: "uppercase",
+  },
+  progressTrack: {
+    height: 3,
+    background: "#1e1e1e",
+    borderRadius: 2,
+    overflow: "hidden",
+    marginBottom: 6,
+  },
+  progressFill: {
+    height: "100%",
+    background: "linear-gradient(90deg, #34C759, #30D158)",
+    borderRadius: 2,
+    transition: "width 0.5s cubic-bezier(0.4,0,0.2,1)",
+  },
+  progressLabel: {
+    fontSize: 10,
+    color: "#3a3a3a",
+    letterSpacing: "0.15em",
+  },
+  inputRow: {
+    display: "flex",
+    gap: 8,
+    alignItems: "center",
+    marginBottom: 16,
+    background: "#141414",
+    border: "1px solid #222",
+    borderRadius: 4,
+    padding: "10px 12px",
+  },
+  input: {
+    flex: 1,
+    background: "transparent",
+    border: "none",
+    outline: "none",
+    color: "#e8e8e8",
+    fontFamily: "'Space Mono', monospace",
+    fontSize: 13,
+    minWidth: 0,
+  },
+  priorityGroup: {
+    display: "flex",
+    gap: 4,
+    flexShrink: 0,
+  },
+  priBtn: {
+    fontFamily: "'Space Mono', monospace",
+    fontSize: 9,
+    fontWeight: 700,
+    letterSpacing: "0.1em",
+    padding: "3px 7px",
+    border: "1px solid",
+    borderRadius: 2,
+    cursor: "pointer",
+    transition: "all 0.15s",
+  },
+  addBtn: {
+    width: 32,
+    height: 32,
+    border: "none",
+    background: "#e8e8e8",
+    color: "#0d0d0d",
+    borderRadius: 3,
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+    transition: "background 0.15s",
+  },
+  plus: {
+    fontSize: 20,
+    lineHeight: 1,
+    fontFamily: "'Syne', sans-serif",
+    fontWeight: 700,
+  },
+  filterRow: {
+    display: "flex",
+    gap: 6,
+    marginBottom: 20,
+    flexWrap: "wrap",
+  },
+  filterBtn: {
+    fontFamily: "'Space Mono', monospace",
+    fontSize: 10,
+    letterSpacing: "0.15em",
+    padding: "5px 12px",
+    border: "1px solid #222",
+    borderRadius: 2,
+    background: "transparent",
+    color: "#444",
+    cursor: "pointer",
+    transition: "all 0.15s",
+  },
+  filterBtnActive: {
+    background: "#e8e8e8",
+    color: "#0d0d0d",
+    borderColor: "#e8e8e8",
+  },
+  clearBtn: {
+    fontFamily: "'Space Mono', monospace",
+    fontSize: 10,
+    letterSpacing: "0.15em",
+    padding: "5px 12px",
+    border: "1px solid #FF3B3044",
+    borderRadius: 2,
+    background: "transparent",
+    color: "#FF3B30",
+    cursor: "pointer",
+    marginLeft: "auto",
+  },
+  list: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 6,
+  },
+  empty: {
+    textAlign: "center",
+    color: "#333",
+    fontSize: 12,
+    letterSpacing: "0.1em",
+    padding: "40px 0",
+    fontStyle: "italic",
+  },
+  item: {
+    display: "flex",
+    alignItems: "center",
+    gap: 12,
+    background: "#111",
+    border: "1px solid #1c1c1c",
+    borderRadius: 4,
+    padding: "11px 14px",
+    transition: "opacity 0.2s, border-color 0.2s",
+  },
+  check: {
+    width: 20,
+    height: 20,
+    border: "2px solid",
+    borderRadius: 3,
+    background: "transparent",
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+    transition: "background 0.15s",
+  },
+  checkmark: {
+    fontSize: 11,
+    color: "#fff",
+    fontWeight: 700,
+  },
+  textArea: {
+    flex: 1,
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    minWidth: 0,
+  },
+  todoText: {
+    fontSize: 13,
+    lineHeight: 1.4,
+    flex: 1,
+    minWidth: 0,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+    cursor: "default",
+  },
+  priTag: {
+    fontFamily: "'Space Mono', monospace",
+    fontSize: 9,
+    fontWeight: 700,
+    letterSpacing: "0.1em",
+    padding: "2px 6px",
+    borderRadius: 2,
+    flexShrink: 0,
+  },
+  editInput: {
+    flex: 1,
+    background: "#1a1a1a",
+    border: "1px solid #333",
+    borderRadius: 3,
+    color: "#e8e8e8",
+    fontFamily: "'Space Mono', monospace",
+    fontSize: 13,
+    padding: "2px 8px",
+    outline: "none",
+    minWidth: 0,
+  },
+  actions: {
+    display: "flex",
+    gap: 4,
+    flexShrink: 0,
+    opacity: 0,
+  },
+  actionBtn: {
+    background: "transparent",
+    border: "1px solid #252525",
+    color: "#444",
+    fontSize: 11,
+    width: 24,
+    height: 24,
+    borderRadius: 3,
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    transition: "all 0.15s",
+  },
+  deleteBtn: {
+    color: "#FF3B30",
+    borderColor: "#FF3B3033",
+  },
+  footer: {
+    marginTop: 32,
+    fontSize: 10,
+    color: "#2a2a2a",
+    letterSpacing: "0.1em",
+    textAlign: "center",
+  },
+  shake: {},
+};
